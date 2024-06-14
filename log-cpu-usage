@@ -9,10 +9,14 @@ log_file=$1
 
 current_datetime=$(date +'%Y-%m-%d %H:%M:%S')
 
-cpu_usage=$(top -l 1 -n 1 | grep "CPU usage" | awk '{print $3, $5, $7}' | tr -d '%')
+top_output=$(top -l 1 -n 1)
+
+avg_load=$(echo "$top_output" | grep "Load Avg" | awk '{print $3, $4, $5}' | tr -d ',')
+
+cpu_usage=$(echo "$top_output" | grep "CPU usage" | awk '{print $3, $5, $7}' | tr -d '%')
 
 if [ ! -f "$log_file" ]; then
-    echo "Date Time User Sys Idle" > "$log_file"
+    echo "Date Time LoadAvg1 LoadAvg5 LoadAvg15 CpuUser CpuSys CpuIdle" > "$log_file"
 fi
 
-echo "$current_datetime $cpu_usage" >> "$log_file"
+echo "$current_datetime $avg_load $cpu_usage" >> "$log_file"
