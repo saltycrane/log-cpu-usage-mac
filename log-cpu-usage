@@ -1,22 +1,40 @@
 #!/bin/bash
 
+# Set PATH because `ioreg` was not working with cron
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
+# Expect the logfile path to be the first argument on the command line
 if [ -z "$1" ]; then
     echo "Usage: $0 /path/to/logfile"
     exit 1
 fi
-
 log_file=$1
 
+# Get various information to log
 current_datetime=$(date +'%Y-%m-%d %H:%M:%S')
-
+idle_time_hrs=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {printf "%.2f", $NF/1000000000/3600; exit}')
 top_output=$(top -l 1 -n 1)
-
 avg_load=$(echo "$top_output" | grep "Load Avg" | awk '{print $3, $4, $5}' | tr -d ',')
-
 cpu_usage=$(echo "$top_output" | grep "CPU usage" | awk '{print $3, $5, $7}' | tr -d '%')
 
-if [ ! -f "$log_file" ]; then
-    echo "Date Time LoadAvg1 LoadAvg5 LoadAvg15 CpuUser CpuSys CpuIdle" > "$log_file"
+# Determine list of newly started and stopped processes
+current_processes="/tmp/current-processes-${USER}.txt"
+previous_processes="/tmp/previous-processes-${USER}.txt"
+ps -eo comm | tail -n +2 | sort | uniq > "$current_processes"
+if [ -f "$previous_processes" ]; then
+    started_processes=$(comm -13 "$previous_processes" "$current_processes" | awk '{printf "%s%s", (NR==1 ? "" : ","), $0}')
+    stopped_processes=$(comm -23 "$previous_processes" "$current_processes" | awk '{printf "%s%s", (NR==1 ? "" : ","), $0}')
 fi
+if [ -z "$started_processes" ]; then
+    started_processes="[NONE]"
+fi
+if [ -z "$stopped_processes" ]; then
+    stopped_processes="[NONE]"
+fi
+mv -f "$current_processes" "$previous_processes"
 
-echo "$current_datetime $avg_load $cpu_usage" >> "$log_file"
+# Write to the log file
+if [ ! -f "$log_file" ]; then
+    echo "Date Time IdleTimeHrs LoadAvg1 LoadAvg5 LoadAvg15 CpuUser CpuSys CpuIdle StartedProcesses StoppedProcesses" > "$log_file"
+fi
+echo "$current_datetime $idle_time_hrs $avg_load $cpu_usage $started_processes $stopped_processes" >> "$log_file" 2>&1
