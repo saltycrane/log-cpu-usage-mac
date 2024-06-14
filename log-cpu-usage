@@ -3,38 +3,48 @@
 # Set PATH because `ioreg` was not working with cron
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
-# Expect the logfile path to be the first argument on the command line
-if [ -z "$1" ]; then
-    echo "Usage: $0 /path/to/logfile"
-    exit 1
-fi
-log_file=$1
+# Get the log directory from the first argument on the command line (default to the current directory)
+log_directory=${1:-"."}
+log_file="$log_directory/cpu-usage.log"
+top_processes_log_file="$log_directory/top-processes.log"
+echo "Log directory: $log_directory"
+mkdir -p "$log_directory"
 
-# Get various information to log
-current_datetime=$(date +'%Y-%m-%d %H:%M:%S')
-idle_time_hrs=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {printf "%.2f", $NF/1000000000/3600; exit}')
-top_output=$(top -l 1 -n 1)
-avg_load=$(echo "$top_output" | grep "Load Avg" | awk '{print $3, $4, $5}' | tr -d ',')
-cpu_usage=$(echo "$top_output" | grep "CPU usage" | awk '{print $3, $5, $7}' | tr -d '%')
+log_stats() {
+    # Get various information to log
+    top_output=$(top -l 2 -n 5 -stats command,cpu,time,state,user)  # the `top` command is run twice so it takes a couple seconds
+    current_datetime=$(date +'%Y-%m-%d %H:%M:%S')
+    idle_time_hrs=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {printf "%.2f", $NF/1000000000/3600; exit}')
+    avg_load_1=$(echo "$top_output" | grep "Load Avg" | awk 'NR==2' | awk '{print $3}' | tr -d ',')
+    cpu_usage=$(echo "$top_output" | grep "CPU usage" | awk 'NR==2' | awk '{print $3, $5, $7}' | tr -d '%')
 
-# Determine list of newly started and stopped processes
-current_processes="/tmp/current-processes-${USER}.txt"
-previous_processes="/tmp/previous-processes-${USER}.txt"
-ps -eo comm | tail -n +2 | sort | uniq > "$current_processes"
-if [ -f "$previous_processes" ]; then
-    started_processes=$(comm -13 "$previous_processes" "$current_processes" | awk '{printf "%s%s", (NR==1 ? "" : ","), $0}')
-    stopped_processes=$(comm -23 "$previous_processes" "$current_processes" | awk '{printf "%s%s", (NR==1 ? "" : ","), $0}')
-fi
-if [ -z "$started_processes" ]; then
-    started_processes="[NONE]"
-fi
-if [ -z "$stopped_processes" ]; then
-    stopped_processes="[NONE]"
-fi
-mv -f "$current_processes" "$previous_processes"
+    # Determine list of newly started and stopped processes
+    current_processes="/tmp/current-processes-${USER}.txt"
+    previous_processes="/tmp/previous-processes-${USER}.txt"
+    ps -eo comm | tail -n +2 | sort | uniq > "$current_processes"
+    if [ -f "$previous_processes" ]; then
+        started_processes=$(comm -13 "$previous_processes" "$current_processes" | awk '{printf "%s%s", (NR==1 ? "" : ","), $0}')
+    fi
+    if [ -z "$started_processes" ]; then
+        started_processes="[NONE]"
+    fi
+    mv -f "$current_processes" "$previous_processes"
 
-# Write to the log file
-if [ ! -f "$log_file" ]; then
-    echo "Date Time IdleTimeHrs LoadAvg1 LoadAvg5 LoadAvg15 CpuUser CpuSys CpuIdle StartedProcesses StoppedProcesses" > "$log_file"
-fi
-echo "$current_datetime $idle_time_hrs $avg_load $cpu_usage $started_processes $stopped_processes" >> "$log_file" 2>&1
+    # Write to the "cpu-usage.log" file
+    if [ ! -f "$log_file" ]; then
+        echo "Date Time IdleTimeHrs LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses" > "$log_file"
+    fi
+    echo "$current_datetime $idle_time_hrs $avg_load_1 $cpu_usage $started_processes" >> "$log_file" 2>&1
+
+    # If the 1-minute load average is > 10, log the top 5 processes to the "top-processes.log" file
+    if (( $(echo "$avg_load_1 > 10" | bc -l) )); then
+        printf "\n========================================================================\n" >> "$top_processes_log_file"
+        echo "$top_output" | grep -vE '^(Processes|SharedLibs|MemRegions|PhysMem|VM|Networks|Disks):' | tail -10 >> "$top_processes_log_file"
+    fi
+}
+
+for _ in {1..4}
+do
+    log_stats
+    sleep 10
+done
