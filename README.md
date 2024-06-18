@@ -17,8 +17,8 @@ cat ./cpu-usage.log
 ```
 
 ```
-Date Time IdleTimeHrs LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses
-2024-06-14 15:04:26 0.00 3.49 11.34 14.8 74.57 [NONE]
+Date Time IdleTime LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses
+2024-06-18 14:22:25 0h0m 3.75 7.73 4.92 87.34 [NONE]
 ```
 
 ## Usage with cron
@@ -42,9 +42,9 @@ cat /tmp/cpu-usage.log
 ```
 
 ```
-Date Time IdleTimeHrs LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses
-2024-06-14 15:05:00 0.00 3.98 11.69 13.61 74.69 [NONE]
-2024-06-14 15:06:00 0.00 2.76 10.3 7.52 82.44 [NONE]
+Date Time IdleTime LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses
+2024-06-14 15:05:00 0h0m 3.98 11.69 13.61 74.69 [NONE]
+2024-06-14 15:06:00 0h0m 2.76 10.3 7.52 82.44 [NONE]
 ```
 
 ## Top processes log file

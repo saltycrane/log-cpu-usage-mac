@@ -13,7 +13,10 @@ mkdir -p "$log_directory"
 # Get various information to log
 top_output=$(top -l 2 -n 5 -stats command,cpu,time,state,user)  # the `top` command is run twice so it takes a couple seconds
 current_datetime=$(date +'%Y-%m-%d %H:%M:%S')
-idle_time_hrs=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {printf "%.2f", $NF/1000000000/3600; exit}')
+idle_time_total_mins=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print $NF/1000000000/60; exit}')
+idle_time_hours=$(echo "$idle_time_total_mins / 60" | bc)
+idle_time_mins=$(echo "$idle_time_total_mins % 60" | bc)
+idle_time=$(printf "%dh%.0fm" "$idle_time_hours" "$idle_time_mins")
 avg_load_1=$(echo "$top_output" | grep "Load Avg" | awk 'NR==2' | awk '{print $3}' | tr -d ',')
 cpu_usage=$(echo "$top_output" | grep "CPU usage" | awk 'NR==2' | awk '{print $3, $5, $7}' | tr -d '%')
 
@@ -31,9 +34,9 @@ mv -f "$current_processes" "$previous_processes"
 
 # Write to the "cpu-usage.log" file
 if [ ! -f "$log_file" ]; then
-    echo "Date Time IdleTimeHrs LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses" > "$log_file"
+    echo "Date Time IdleTime LoadAvg1 CpuUser CpuSys CpuIdle StartedProcesses" > "$log_file"
 fi
-echo "$current_datetime $idle_time_hrs $avg_load_1 $cpu_usage $started_processes" >> "$log_file" 2>&1
+echo "$current_datetime $idle_time $avg_load_1 $cpu_usage $started_processes" >> "$log_file" 2>&1
 
 # If the 1-minute load average is > 10, log the top 5 processes to the "top-processes.log" file
 if (( $(echo "$avg_load_1 > 10" | bc -l) )); then
