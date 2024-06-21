@@ -7,12 +7,30 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 log_directory=${1:-"."}
 log_file="$log_directory/cpu-usage.log"
 top_processes_log_file="$log_directory/top-processes.log"
+date_file="$log_directory/last-rotation-date.txt"
 echo "Log directory: $log_directory"
 mkdir -p "$log_directory"
 
+# Rotate the log files if the date has changed
+current_date=$(date +'%Y%m%d')
+if [ -f "$date_file" ]; then
+    last_rotation_date=$(cat "$date_file")
+    if [ "$current_date" != "$last_rotation_date" ]; then
+        log_file_archived="$log_file.$last_rotation_date"
+        top_processes_log_file_archived="$top_processes_log_file.$last_rotation_date"
+        mv -f "$log_file" "$log_file_archived"
+        mv -f "$top_processes_log_file" "$top_processes_log_file_archived"
+        gzip -f "$log_file_archived"
+        gzip -f "$top_processes_log_file_archived"
+        echo "$current_date" > "$date_file"
+    fi
+else
+    echo "$current_date" > "$date_file"
+fi
+
 # Get various information to log
-top_output=$(top -l 2 -n 5 -stats command,cpu,time,state,user)  # the `top` command is run twice so it takes a couple seconds
 current_datetime=$(date +'%Y-%m-%d %H:%M:%S')
+top_output=$(top -l 2 -n 5 -stats command,cpu,time,state,user)  # the `top` command is run twice so it takes a couple seconds
 idle_time_total_mins=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print $NF/1000000000/60; exit}')
 idle_time_hours=$(echo "$idle_time_total_mins / 60" | bc)
 idle_time_mins=$(echo "$idle_time_total_mins % 60" | bc)
